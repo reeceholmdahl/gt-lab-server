@@ -28,7 +28,6 @@ async function getUser(email) {
     const result = await db.execute(query, [ email ]);
     if (result.rows[0]) return result.rows[0];
     return null;
-    // throw new Error(`Could not retrieve user with email '${email}' from database`);
 }
 
 async function getAdmins() {
@@ -42,7 +41,6 @@ async function getAdmin(email) {
     const result = await db.execute(query, [ email ]);
     if (result.rows[0]) return result.rows[0];
     return null;
-    // throw new Error(`Could not retrieve admin with email '${email}' from database`);
 }
 
 async function getAdminAccessTokens() {
@@ -56,7 +54,6 @@ async function getAdminAccessToken(email) {
     const result = await db.execute(query, [ email ]);
     if (result.rows[0]) return result.rows[0];
     return null;
-    // throw new Error(`Could not retrieve any admin token with email '${email}' from database`);
 }
 
 async function createAdminAccessToken(email, accessToken, created, ttl) {
@@ -71,8 +68,38 @@ async function createAdminAccessToken(email, accessToken, created, ttl) {
     await db.execute(query, [ accessToken, created, ttl, email ], { prepare: true });
 }
 
+async function getUserAccessTokens() {
+    const query = 'SELECT * FROM user_access_tokens';
+    const result = await db.execute(query);
+    return result.rows;
+}
+
+async function getUserAccessToken(email) {
+    const query = 'SELECT * FROM user_access_tokens WHERE email = ?';
+    const result = await db.execute(query, [ email ]);
+    if (result.rows[0]) return result.rows[0];
+    return null;
+}
+
 async function revokeAdminAccessToken(email) {
     const query = 'DELETE FROM admin_access_tokens WHERE email = ?';
+    await db.execute(query, [ email ]);
+}
+
+async function createUserAccessToken(email, accessToken, created, ttl) {
+    let query;
+
+    if (await getUserAccessToken(email)) {
+        query = 'UPDATE user_access_tokens SET access_token = ? , created = ? , ttl = ? WHERE email=?';
+    } else {
+        query = 'INSERT INTO user_access_tokens ( access_token, created, ttl, email ) VALUES ( ?, ?, ?, ? )';
+    }
+
+    await db.execute(query, [ accessToken, created, ttl, email ], { prepare: true });
+}
+
+async function revokeUserAccessToken(email) {
+    const query = 'DELETE FROM user_access_tokens WHERE email = ?';
     await db.execute(query, [ email ]);
 }
 
@@ -92,7 +119,7 @@ async function getUserRegistrationToken(email) {
 async function createUserRegistrationToken(email, registrationToken, created, ttl) {
     let query;
 
-    if (await getAdminAccessToken(email)) {
+    if (await getUserRegistrationToken(email)) {
         query = 'UPDATE user_registration_tokens SET registration_token = ? , created = ? , ttl = ? WHERE email=?';
     } else {
         query = 'INSERT INTO user_registration_tokens ( registration_token, created, ttl, email ) VALUES ( ?, ?, ?, ? )';
@@ -115,6 +142,10 @@ module.exports = {
     getAdminAccessToken,
     createAdminAccessToken,
     revokeAdminAccessToken,
+    getUserAccessTokens,
+    getUserAccessToken,
+    createUserAccessToken,
+    revokeUserAccessToken,
     getUserRegistrationTokens,
     getUserRegistrationToken,
     createUserRegistrationToken,

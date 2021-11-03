@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db/cassandra.js');
-const emailValidator = require("email-validator");
+const emailValidator = require('email-validator');
 
 const router = express.Router();
 
@@ -16,7 +16,12 @@ const router = express.Router();
  * if POST /auth with a live token for the user with the respective email, will delete token and make a new token
  * 
  * Failure Codes
- * 
+ * 400 - no email provided
+ * 400 - no date provided
+ * 400 - invalid date format
+ * 400 - no authorization token provided
+ * 401 - invalid authorization token provided
+ * 401 - no admin with this email
  */
 const DEFAULT_ACCESS_TOKEN_TTL = 1 * 60 * 60 * 1000; // 1 hour
 
@@ -81,8 +86,8 @@ router.post('/auth', async (req, res) => {
  * Failure Codes
  * 400 - no email provided
  * 400 - no access token provided
- * 401 - no admin with this email identifier
- * 401 - invalid access token for the admin with this email identifier
+ * 401 - no admin with this email
+ * 401 - invalid access token for the admin with this email
  */
 const verifyAccessToken = async (req, res, next) => {
 
