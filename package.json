@@ -1,0 +1,19 @@
+{
+  "name": "gt-lab-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --trace-warnings ./server/src/main.js"
+  },
+  "keywords": [],
+  "author": "UMD Gamification and Transportation Research Lab",
+  "license": "ISC",
+  "dependencies": {
+    "cassandra-driver": "^4.6.3",
+    "express": "^4.17.1",
+    "mg-api-js": "^2.0.3",
+    "passport": "^0.5.0",
+    "passport-local": "^1.0.0"
+  }
+}
