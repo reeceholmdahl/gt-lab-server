@@ -1,20 +1,21 @@
 const express = require('express');
-const crypto = require('crypto');
 const db = require('../db/cassandra.js');
-const emailValidator = require('email-validator');
 const verifyRequestBody = require('../middleware/verify-request-body.js');
+const errorMessage = require('../util/error-msg.js');
+const crypto = require('crypto');
 
+// Express router
 const router = express.Router();
 
 /**
- * Verify Access Token: @credentials
- * credentials: { email: 'email', access_token: 'token' }
+ * # Verify Access Token: @credentials
+ * REQUEST BODY contains: credentials: { email: 'email', access_token: 'token' }
  * 
  * Failure Codes
- * 400 - no email provided
- * 400 - no access token provided
- * 401 - no admin with this email
- * 401 - invalid access token for the user with this email
+ * * 400 - no email provided
+ * * 400 - no access token provided
+ * * 401 - no admin with this email
+ * * 401 - invalid access token for the user with this email
  */
  const verifyAccessToken = async (req, res, next) => {
 
@@ -42,7 +43,7 @@ const router = express.Router();
 
         // If the user object is null, there was no user in the database
         if (!user) {
-            res.status(401).send(`Could not find a user with the email '${email}'`);
+            res.status(401).send(errorMessage(`Could not find a user with the email '${email}'`));
         }
 
         const tokenDeath = new Date(token.created).getTime() + token.ttl;
@@ -65,82 +66,69 @@ const router = express.Router();
         
         // If there is no valid access token
         else {
-            res.status(401).send(`Invalid access token for the user with the email '${email}'`);
+            res.status(401).send(errorMessage(`Invalid access token for the user with the email '${email}'`));
         }
     });
 };
 
 /**
- * POST /auth
+ * # POST /auth
  * REQUEST BODY { auth_token: 'token', email: 'email', date: 'date' }
  * RESPONSE BODY { access_token: 'token', ttl: 'ttl' }
  * 
- * send auth token 'email' + 'date' encrypted with hash with secret of password, for now HMAC sha-256
- * return an access token granted by a server for a given ttl. access token is 'email' + 'created' + 'ttl' hashed with the user password
- * 
- * if POST /auth with a live token for the user with the respective email, will delete token and make a new token
+ * ! Send auth token 'email' + 'date' encrypted with hash with secret of password, for now HMAC sha-256
+ * ! Receive an access token granted by a server for a given ttl. access token is 'email' + 'created' + 'ttl' hashed with the user password
+ * ! If POST /auth with a live token for the user with the respective email, will delete token and make a new token
  * 
  * Failure Codes
- * 400 - no email provided
- * 400 - no date provided
- * 400 - invalid date format
- * 400 - no authorization token provided
- * 401 - invalid authorization token provided
- * 401 - no user with this email
+ * * 400 - no email provided
+ * * 400 - no date provided
+ * * 400 - invalid date format
+ * * 400 - no authorization token provided
+ * * 401 - invalid authorization token provided
+ * * 401 - no user with this email
  */
 const DEFAULT_ACCESS_TOKEN_TTL = 1 * 60 * 60 * 1000; // 1 hour
 
-router.post('/auth', async (req, res) => {
+router.post('/auth', [ verifyRequestBody({
+    email: String,
+    date: Date,
+    auth_token: String
+}) ], async (req, res) => {
 
-    const email = req.body?.email;
-    const date = new Date(req.body?.date);
-    const authToken = req.body?.auth_token;
-    
-    // Error cases
-    if (!email) {
-        res.status(400).send('No email provided');
-    }
+    const email = req.body.email;
+    const date = req.body.date;
+    const authToken = req.body.auth_token;
 
-    if (!date) {
-        res.status(400).send('No date provided');
-    }
+    // if (!date.toJSON()) {
+    //     res.status(400).send(errorMessage('Invalid date format'));
+    // }
 
-    if (date && !date.toJSON()) {
-        res.status(400).send('Invalid date format');
-    }
+    const user = await db.getUser(email);
 
-    if (!authToken) {
-        res.status(400).send('No authorization token provided');
-    }
+    if (user) {
 
-    // Success case
-    if (email && (date && date.toJSON()) && authToken) {
-        const user = await db.getUser(email);
+        const verifyAuthToken = crypto.createHash('sha256', user.password).update(String(user.email + date.toISOString())).digest('base64');
 
-        if (user) {
+        if (authToken === verifyAuthToken) {
 
-            const verifyAuthToken = crypto.createHash('sha256', user.password).update(String(user.email + date.toISOString())).digest('base64');
+            const created = new Date();
+            const ttl = DEFAULT_ACCESS_TOKEN_TTL;
+            const accessToken = crypto.createHash('sha256', user.password).update(String(email + created.toISOString() + ttl)).digest('base64');
 
-            if (authToken === verifyAuthToken) {
+            await db.createUserAccessToken(email, accessToken, created.toISOString(), ttl);
 
-                const created = new Date();
-                const ttl = DEFAULT_ACCESS_TOKEN_TTL;
-                const accessToken = crypto.createHash('sha256', user.password).update(String(email + created.toISOString() + ttl)).digest('base64');
-
-                await db.createUserAccessToken(email, accessToken, created.toISOString(), ttl);
-
-                res.status(200).send({
-                    access_token: accessToken,
-                    ttl
-                });
-
-            } else {
-                res.status(401).send('Invalid authorization token');
-            }
+            res.status(200).send({
+                access_token: accessToken,
+                ttl
+            });
 
         } else {
-            res.status(401).send(`Could not find a user with email '${email}'`);
+            res.status(401).send(errorMessage('Invalid authorization token'));
         }
+
+    } else {
+        res.status(401).send(errorMessage(`Could not find a user with email '${email}'`));
     }
 });
 
@@ -156,12 +144,7 @@ router.post('/auth', async (req, res) => {
  * 400 - 'to' date formatted incorrectly
  * 400 - invalid date range
  */
-router.get('/geotab-data', [ verifyRequestBody({
-    test: {
-        nestest: String
-    },
-    woah: Number
-}), verifyAccessToken ], (req, res) => {
+router.get('/geotab-data', [ verifyAccessToken ], (req, res) => {
     // Driving data (pulled straight from MyGeotab)
     res.send('hello');
 });

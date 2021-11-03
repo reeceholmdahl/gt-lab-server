@@ -1,8 +1,14 @@
+const errorMessage = require('../util/error-msg.js');
+
 /**
- * Verify Request Body
+ * # Verify Request Body
+ * 
+ * Has automatic type conversion for:
+ * * String to Date
  * 
  * Failure Codes
- * 400 - any key (recursively) in 'expectedRequestBody' is missing in req.body of the request this middleware is used on
+ * * 400 - any key (recursively) in 'expectedRequestBody' is missing in req.body of the request this middleware is used on
+ * * 400 - could not convert data type
  * 
  * @param {ObjectConstructor} expectedRequestBody The object constructor (basically an interface) of the expected request body
  * @returns A middleware that will verify the request body and give feedback to augment the body on failure
@@ -43,8 +49,7 @@ module.exports = (expectedRequestBody) => async (req, res, next) => {
             else if (typeof actual[key] !== expectedKeyType) {
 
                 // Object key is not the type expected
-                errors.push(`The value of key '${path}${key}' is a ${typeof actual[key]} when a ${expectedKeyType} was expected`);
-            
+                errors.push(`The value of key '${path}${key}' is a ${typeof actual[key]} when a ${expectedKeyType} was expected`);            
             }
             
             // If the key type for the actual and sample object is an object, recurse
@@ -53,6 +58,25 @@ module.exports = (expectedRequestBody) => async (req, res, next) => {
                 // Recursively check this key as an object against its sample
                 recursiveCheck(sample[key], actual[key], `${path}${key}.`);
 
+            }
+
+            // Selective type conversion
+            const save = actual[key];
+            try {
+                switch (sample[key]) {
+                    case Date:
+                        actual[key] = new Date(actual[key]);
+                        if (!actual[key].toJSON()) throw new Error(`${actual[key]} is not a valid date`);
+                        break;
+
+                    default:
+                        // Do nothing
+                        break;
+                }
+            } catch {
+                // Could not convert the key to the type
+                actual[key] = save;
+                errors.push(`Could not convert ${actual[key]} from ${typeof actual[key]} to ${sample[key].name}`);
             }
         }
     }
@@ -67,8 +91,6 @@ module.exports = (expectedRequestBody) => async (req, res, next) => {
     
     // If there are errors, send a status 400 along with the array of error messages
     else {
-        res.status(400).send({
-            messages: errors
-        });
+        res.status(400).send(errorMessage(...errors));
     }
 };

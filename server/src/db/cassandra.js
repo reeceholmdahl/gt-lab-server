@@ -25,7 +25,7 @@ async function getUsers() {
 
 async function getUser(email) {
     const query = 'SELECT * FROM users WHERE email = ?';
-    const result = await db.execute(query, [ email ]);
+    const result = await db.execute(query, [ email ], { hints: [ 'ascii' ] });
     if (result.rows[0]) return result.rows[0];
     return null;
 }
@@ -38,7 +38,7 @@ async function getAdmins() {
 
 async function getAdmin(email) {
     const query = 'SELECT * FROM admins WHERE email = ?';
-    const result = await db.execute(query, [ email ]);
+    const result = await db.execute(query, [ email ], { hints: [ 'ascii' ] });
     if (result.rows[0]) return result.rows[0];
     return null;
 }
@@ -51,7 +51,7 @@ async function getAdminAccessTokens() {
 
 async function getAdminAccessToken(email) {
     const query = 'SELECT * FROM admin_access_tokens WHERE email = ?';
-    const result = await db.execute(query, [ email ]);
+    const result = await db.execute(query, [ email ], { hints: [ 'ascii' ] });
     if (result.rows[0]) return result.rows[0];
     return null;
 }
@@ -65,7 +65,7 @@ async function createAdminAccessToken(email, accessToken, created, ttl) {
         query = 'INSERT INTO admin_access_tokens ( access_token, created, ttl, email ) VALUES ( ?, ?, ?, ? )';
     }
 
-    await db.execute(query, [ accessToken, created, ttl, email ], { prepare: true });
+    await db.execute(query, [ accessToken, created, ttl, email ], { hints: [ 'ascii', 'ascii', 'int', 'ascii' ] });
 }
 
 async function getUserAccessTokens() {
@@ -76,14 +76,14 @@ async function getUserAccessTokens() {
 
 async function getUserAccessToken(email) {
     const query = 'SELECT * FROM user_access_tokens WHERE email = ?';
-    const result = await db.execute(query, [ email ]);
+    const result = await db.execute(query, [ email ], { hints: [ 'ascii' ] });
     if (result.rows[0]) return result.rows[0];
     return null;
 }
 
 async function revokeAdminAccessToken(email) {
     const query = 'DELETE FROM admin_access_tokens WHERE email = ?';
-    await db.execute(query, [ email ]);
+    await db.execute(query, [ email ], { hints: [ 'ascii' ] });
 }
 
 async function createUserAccessToken(email, accessToken, created, ttl) {
@@ -95,12 +95,12 @@ async function createUserAccessToken(email, accessToken, created, ttl) {
         query = 'INSERT INTO user_access_tokens ( access_token, created, ttl, email ) VALUES ( ?, ?, ?, ? )';
     }
 
-    await db.execute(query, [ accessToken, created, ttl, email ], { prepare: true });
+    await db.execute(query, [ accessToken, created, ttl, email ], { hints: [ 'ascii', 'ascii', 'int', 'ascii' ] });
 }
 
 async function revokeUserAccessToken(email) {
     const query = 'DELETE FROM user_access_tokens WHERE email = ?';
-    await db.execute(query, [ email ]);
+    await db.execute(query, [ email ], { hints: [ 'ascii' ] });
 }
 
 async function getUserRegistrationTokens() {
@@ -111,7 +111,7 @@ async function getUserRegistrationTokens() {
 
 async function getUserRegistrationToken(email) {
     const query = 'SELECT * FROM user_registration_tokens WHERE email = ?';
-    const result = await db.execute(query, [ email ]);
+    const result = await db.execute(query, [ email ], { hints: [ 'ascii' ] });
     if (result.rows[0]) return result.rows[0];
     return null;
 }
@@ -125,12 +125,12 @@ async function createUserRegistrationToken(email, registrationToken, created, tt
         query = 'INSERT INTO user_registration_tokens ( registration_token, created, ttl, email ) VALUES ( ?, ?, ?, ? )';
     }
 
-    await db.execute(query, [ registrationToken, created, ttl, email ], { prepare: true });
+    await db.execute(query, [ registrationToken, created, ttl, email ], { hints: [ 'ascii', 'ascii', 'int', 'ascii' ] });
 }
 
 async function revokeUserRegistrationToken(email) {
     const query = 'DELETE FROM user_registration_tokens WHERE email = ?';
-    await db.execute(query, [ email ]);
+    await db.execute(query, [ email ], { hints: [ 'ascii' ] });
 }
 
 module.exports = {
