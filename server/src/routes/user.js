@@ -18,49 +18,53 @@ const router = express.Router();
  */
  const verifyAccessToken = async (req, res, next) => {
 
-    // const email = req.body?.credentials?.email;
-    // const accessToken = req.body?.credentials?.access_token;
-
-    // if (!email) {
-    //     res.status(400).send('No email provided');
-    // }
-
-    // if (!accessToken) {
-    //     res.status(400).send('No access token provided');
-    // }
-
-    verifyRequestBody({
+    // Verify that the request body contains the proper credentials object with middleware-generating function
+    const checkCredentialsObject = verifyRequestBody({
         credentials: {
             email: String,
             access_token: String
         }
-    })(req, res, async () => {
+    });
+    
+    // Sub the 'next' function in the middleware for the verify access token function
+    checkCredentialsObject(req, res, async () => {
+
+        // If we've made it this far, we can be certain 'email' and 'access_token' exist
         const email = req.body.credentials.email;
         const accessToken = req.body.credentials.access_token;
 
+        // Asynchronously retrieve the user and token respective to the credentials email
         let user, token;
         await Promise.all([
-            db.getUser(email ?? '').then(_user => user = _user),
-            db.getUserAccessToken(email ?? '').then(_token => token = _token)
+            db.getUser(email).then(_user => user = _user),
+            db.getUserAccessToken(email).then(_token => token = _token)
         ]);
 
+        // If the user object is null, there was no user in the database
         if (!user) {
             res.status(401).send(`Could not find a user with the email '${email}'`);
         }
 
-        if (user && token && new Date(token.created).getTime() + token.ttl < Date.now()) {
+        const tokenDeath = new Date(token.created).getTime() + token.ttl;
+
+        // If there is a token, but the token alredy died, revoke the token from the database and set token to false
+        if (/**user &&*/token && tokenDeath < Date.now()) {
             
             db.revokeUserAccessToken(email);
             token = false;
         }
 
+        // If there is a token it is equal to the credentials access token
         if (token && token.access_token === accessToken) {
 
-            // Success case
-            if (user && token && new Date(token.created).getTime() + token.ttl >= Date.now()) {
+            // Success case; the user is valid and the token is alive, proceed to the next route handler
+            if (user && token && tokenDeath >= Date.now()) {
                 next();
             }
-        } else {
+        }
+        
+        // If there is no valid access token
+        else {
             res.status(401).send(`Invalid access token for the user with the email '${email}'`);
         }
     });
