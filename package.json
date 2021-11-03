@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "cassandra-driver": "^4.6.3",
+    "email-validator": "^2.0.4",
     "express": "^4.17.1",
     "mg-api-js": "^2.0.3",
     "passport": "^0.5.0",

@@ -76,6 +76,36 @@ async function revokeAdminAccessToken(email) {
     await db.execute(query, [ email ]);
 }
 
+async function getUserRegistrationTokens() {
+    const query = 'SELECT * FROM user_registration_tokens';
+    const result = await db.execute(query);
+    return result.rows;
+}
+
+async function getUserRegistrationToken(email) {
+    const query = 'SELECT * FROM user_registration_tokens WHERE email = ?';
+    const result = await db.execute(query, [ email ]);
+    if (result.rows[0]) return result.rows[0];
+    return null;
+}
+
+async function createUserRegistrationToken(email, registrationToken, created, ttl) {
+    let query;
+
+    if (await getAdminAccessToken(email)) {
+        query = 'UPDATE user_registration_tokens SET registration_token = ? , created = ? , ttl = ? WHERE email=?';
+    } else {
+        query = 'INSERT INTO user_registration_tokens ( registration_token, created, ttl, email ) VALUES ( ?, ?, ?, ? )';
+    }
+
+    await db.execute(query, [ registrationToken, created, ttl, email ], { prepare: true });
+}
+
+async function revokeUserRegistrationToken(email) {
+    const query = 'DELETE FROM user_registration_tokens WHERE email = ?';
+    await db.execute(query, [ email ]);
+}
+
 module.exports = {
     getUsers,
     getUser,
@@ -84,5 +114,9 @@ module.exports = {
     getAdminAccessTokens,
     getAdminAccessToken,
     createAdminAccessToken,
-    revokeAdminAccessToken
+    revokeAdminAccessToken,
+    getUserRegistrationTokens,
+    getUserRegistrationToken,
+    createUserRegistrationToken,
+    revokeUserRegistrationToken
 };

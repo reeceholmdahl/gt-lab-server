@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db/cassandra.js');
+const emailValidator = require("email-validator");
 
 const router = express.Router();
 
@@ -23,8 +24,11 @@ function _error(res) {
  * return an access token granted by a server for a given ttl. access token is 'email' + 'created' + 'ttl' hashed with the admin password
  * 
  * if POST /auth with a live token for the user with the respective email, will delete token and make a new token
+ * 
+ * Failure Codes
+ * 
  */
-const TOKEN_TTL = 1 * 60 * 60 * 1000 // 1 hour
+const DEFAULT_ACCESS_TOKEN_TTL = 1 * 60 * 60 * 1000 // 1 hour
 
 router.post('/auth', async (req, res) => {
 
@@ -64,7 +68,7 @@ router.post('/auth', async (req, res) => {
             if (authToken === verifyAuthToken) {
 
                 const created = new Date();
-                const ttl = TOKEN_TTL;
+                const ttl = DEFAULT_ACCESS_TOKEN_TTL;
                 const accessToken = crypto.createHash('sha256', admin.password).update(String(email + created.toISOString() + ttl)).digest('base64');
 
                 await db.createAdminAccessToken(email, accessToken, created.toISOString(), ttl);
@@ -86,12 +90,19 @@ router.post('/auth', async (req, res) => {
     }
 });
 
+/**
+ * Verify Access Token: @credentials
+ * credentials: { email: 'email', access_token: 'token' }
+ * 
+ * Failure Codes
+ * 
+ */
 const verifyAccessToken = async (req, res, next) => {
 
     const error = _error(res);
 
-    const email = req.body?.email;
-    const accessToken = req.body?.access_token;
+    const email = req.body?.credentials?.email;
+    const accessToken = req.body?.credentials?.access_token;
 
     // Failure cases
     const errors = [];
@@ -139,7 +150,11 @@ const verifyAccessToken = async (req, res, next) => {
 
 /**
  * GET /users
- * REQUEST BODY { email: 'email', access_token: 'token' }
+ * REQUEST BODY { @credentials }
+ * RESPONSE BODY [ ...users ]
+ * 
+ * Failure Codes @credentials
+ * 
  */
 router.get('/users', [ verifyAccessToken ], async (req, res) => {
 
@@ -149,6 +164,59 @@ router.get('/users', [ verifyAccessToken ], async (req, res) => {
     });
 
     res.send(users);
+});
+
+/**
+ * POST /new-user
+ * REQUEST BODY { @credentials , user_email: 'email' }
+ * RESPONSE BODY { registration_token: 'token', ttl: 'ttl' }
+ * 
+ * Failures Codes @credentials
+ * 
+ */
+const DEFAULT_REGISTRATION_TOKEN_TTL = 6 * 60 * 60 * 1000 // 6 hours
+
+router.post('/new-user', [ verifyAccessToken ], async (req, res) => {
+
+    const error = _error(res);
+
+    const userEmail = req.body?.user_email;
+
+    // Error cases
+    const errors = [];
+
+    if (!userEmail) {
+        errors.push('No user email provided');
+    }
+
+    let validEmail;
+    if (userEmail && !(validEmail = emailValidator.validate(userEmail))) {
+        errors.push(`The email '${userEmail}' is not a valid email address`);
+    }
+
+    // Success case
+    if (userEmail && validEmail) {
+        error.stop = true;
+
+        const ascii = [];
+        for (let i = 0; i < 16; ++i) {
+            const code = (Math.random() < 0.5 ? 65 : 97) + Math.floor(Math.random() * 26);
+            ascii.push(code);
+        }
+
+        const token = String.fromCharCode(...ascii);
+
+        const now = new Date();
+
+        db.createUserRegistrationToken(userEmail, token, now.toISOString(), DEFAULT_REGISTRATION_TOKEN_TTL);
+
+        res.status(200).send({
+            registration_token: token,
+            ttl: DEFAULT_REGISTRATION_TOKEN_TTL
+        });
+    }
+
+    error(...errors);
 });
 
 module.exports = router;
