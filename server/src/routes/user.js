@@ -2,8 +2,69 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('../db/cassandra.js');
 const emailValidator = require('email-validator');
+const verifyRequestBody = require('../middleware/verify-request-body.js');
 
 const router = express.Router();
+
+/**
+ * Verify Access Token: @credentials
+ * credentials: { email: 'email', access_token: 'token' }
+ * 
+ * Failure Codes
+ * 400 - no email provided
+ * 400 - no access token provided
+ * 401 - no admin with this email
+ * 401 - invalid access token for the user with this email
+ */
+ const verifyAccessToken = async (req, res, next) => {
+
+    // const email = req.body?.credentials?.email;
+    // const accessToken = req.body?.credentials?.access_token;
+
+    // if (!email) {
+    //     res.status(400).send('No email provided');
+    // }
+
+    // if (!accessToken) {
+    //     res.status(400).send('No access token provided');
+    // }
+
+    verifyRequestBody({
+        credentials: {
+            email: String,
+            access_token: String
+        }
+    })(req, res, async () => {
+        const email = req.body.credentials.email;
+        const accessToken = req.body.credentials.access_token;
+
+        let user, token;
+        await Promise.all([
+            db.getUser(email ?? '').then(_user => user = _user),
+            db.getUserAccessToken(email ?? '').then(_token => token = _token)
+        ]);
+
+        if (!user) {
+            res.status(401).send(`Could not find a user with the email '${email}'`);
+        }
+
+        if (user && token && new Date(token.created).getTime() + token.ttl < Date.now()) {
+            
+            db.revokeUserAccessToken(email);
+            token = false;
+        }
+
+        if (token && token.access_token === accessToken) {
+
+            // Success case
+            if (user && token && new Date(token.created).getTime() + token.ttl >= Date.now()) {
+                next();
+            }
+        } else {
+            res.status(401).send(`Invalid access token for the user with the email '${email}'`);
+        }
+    });
+};
 
 /**
  * POST /auth
@@ -74,63 +135,10 @@ router.post('/auth', async (req, res) => {
             }
 
         } else {
-            res.status(401).send(`Could not find an admin with email '${email}'`);
+            res.status(401).send(`Could not find a user with email '${email}'`);
         }
     }
 });
-
-/**
- * Verify Access Token: @credentials
- * credentials: { email: 'email', access_token: 'token' }
- * 
- * Failure Codes
- * 400 - no email provided
- * 400 - no access token provided
- * 401 - no admin with this email
- * 401 - invalid access token for the user with this email
- */
-const verifyAccessToken = async (req, res, next) => {
-
-    const email = req.body?.credentials?.email;
-    const accessToken = req.body?.credentials?.access_token;
-
-    if (!email) {
-        res.status(400).send('No email provided');
-    }
-
-    if (!accessToken) {
-        res.status(400).send('No access token provided');
-    }
-
-    if (email && accessToken) {
-    
-        let user, token;
-        await Promise.all([
-            db.getUser(email ?? '').then(_user => user = _user),
-            db.getUserAccessToken(email ?? '').then(_token => token = _token)
-        ]);
-
-        if (!user) {
-            res.status(401).send(`Could not find an admin with the email '${email}'`);
-        }
-
-        if (user && token && new Date(token.created).getTime() + token.ttl < Date.now()) {
-            
-            db.revokeUserAccessToken(email);
-            token = false;
-        }
-
-        if (token && token.access_token === accessToken) {
-
-            // Success case
-            if (user && token && new Date(token.created).getTime() + token.ttl >= Date.now()) {
-                next();
-            }
-        } else {
-            res.status(401).send(`Invalid access token for the admin with the email '${email}'`);
-        }
-    }
-};
 
 /**
  * GET /geotab-data?from=<from (ISO String)>&to=<to (ISO String)>
@@ -144,8 +152,14 @@ const verifyAccessToken = async (req, res, next) => {
  * 400 - 'to' date formatted incorrectly
  * 400 - invalid date range
  */
-router.get('/geotab-data', [ verifyAccessToken ], (req, res) => {
+router.get('/geotab-data', [ verifyRequestBody({
+    test: {
+        nestest: String
+    },
+    woah: Number
+}), verifyAccessToken ], (req, res) => {
     // Driving data (pulled straight from MyGeotab)
+    res.send('hello');
 });
 
 /**
