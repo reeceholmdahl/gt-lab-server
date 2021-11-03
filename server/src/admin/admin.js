@@ -5,16 +5,6 @@ const emailValidator = require("email-validator");
 
 const router = express.Router();
 
-function _error(res) {
-    return function error(...messages) {
-        if (!error.stop) {
-            res.status(400).send({
-                messages
-            });
-        }
-    };
-}
-
 /**
  * POST /auth
  * REQUEST BODY { auth_token: 'token', email: 'email', date: 'date' }
@@ -28,33 +18,29 @@ function _error(res) {
  * Failure Codes
  * 
  */
-const DEFAULT_ACCESS_TOKEN_TTL = 1 * 60 * 60 * 1000 // 1 hour
+const DEFAULT_ACCESS_TOKEN_TTL = 1 * 60 * 60 * 1000; // 1 hour
 
 router.post('/auth', async (req, res) => {
-
-    const error = _error(res);
 
     const email = req.body?.email;
     const date = new Date(req.body?.date);
     const authToken = req.body?.auth_token;
     
     // Error cases
-    let errors = [];
-
     if (!email) {
-        errors.push('No email provided');
+        res.status(400).send('No email provided');
     }
 
     if (!date) {
-        errors.push('No date provided');
+        res.status(400).send('No date provided');
     }
 
     if (date && !date.toJSON()) {
-        errors.push('Invalid date format');
+        res.status(400).send('Invalid date format');
     }
 
     if (!authToken) {
-        errors.push('No authorization token provided');
+        res.status(400).send('No authorization token provided');
     }
 
     // Success case
@@ -79,14 +65,12 @@ router.post('/auth', async (req, res) => {
                 });
 
             } else {
-                error('Invalid authorization token');
+                res.status(401).send('Invalid authorization token');
             }
 
         } else {
-            error(`Could not find an admin with email '${email}'`);
+            res.status(401).send(`Could not find an admin with email '${email}'`);
         }
-    } else {
-        error(...errors);
     }
 });
 
@@ -95,24 +79,22 @@ router.post('/auth', async (req, res) => {
  * credentials: { email: 'email', access_token: 'token' }
  * 
  * Failure Codes
- * 
+ * 400 - no email provided
+ * 400 - no access token provided
+ * 401 - no admin with this email identifier
+ * 401 - invalid access token for the admin with this email identifier
  */
 const verifyAccessToken = async (req, res, next) => {
-
-    const error = _error(res);
 
     const email = req.body?.credentials?.email;
     const accessToken = req.body?.credentials?.access_token;
 
-    // Failure cases
-    const errors = [];
-
     if (!email) {
-        errors.push('No email provided');
+        res.status(400).send('No email provided');
     }
 
     if (!accessToken) {
-        errors.push('No access token provided');
+        res.status(400).send('No access token provided');
     }
 
     if (email && accessToken) {
@@ -124,7 +106,7 @@ const verifyAccessToken = async (req, res, next) => {
         ]);
 
         if (!admin) {
-            errors.push(`Could not find an admin with the email '${email}'`);
+            res.status(401).send(`Could not find an admin with the email '${email}'`);
         }
 
         if (admin && token && new Date(token.created).getTime() + token.ttl < Date.now()) {
@@ -137,16 +119,13 @@ const verifyAccessToken = async (req, res, next) => {
 
             // Success case
             if (admin && token && new Date(token.created).getTime() + token.ttl >= Date.now()) {
-                error.stop = true;
                 next();
             }
         } else {
-            errors.push(`Incorrect access token for the admin with the email '${email}'`);
+            res.status(401).send(`Invalid access token for the admin with the email '${email}'`);
         }
     }
-
-    error(...errors);
-}
+};
 
 /**
  * GET /users
@@ -154,7 +133,6 @@ const verifyAccessToken = async (req, res, next) => {
  * RESPONSE BODY [ ...users ]
  * 
  * Failure Codes @credentials
- * 
  */
 router.get('/users', [ verifyAccessToken ], async (req, res) => {
 
@@ -167,37 +145,58 @@ router.get('/users', [ verifyAccessToken ], async (req, res) => {
 });
 
 /**
+ * GET /users
+ * REQUEST BODY { @credentials }
+ * RESPONSE BODY [ ...users ]
+ * 
+ * Failure Codes @credentials
+ * 404 - no user found with this email identifier
+ */
+router.get('/user/:email', [ verifyAccessToken ], async (req, res) => {
+
+    const email = req.params.email;
+
+    const user = await db.getUser(email);
+
+    // Success case
+    if (user) {
+        delete user['password'];
+        res.status(200).send(user);
+    } else {
+        res.status(404).send(`There is no user with the email '${email}'`);
+    }
+});
+
+/**
  * POST /new-user
  * REQUEST BODY { @credentials , user_email: 'email' }
  * RESPONSE BODY { registration_token: 'token', ttl: 'ttl' }
  * 
  * Failures Codes @credentials
- * 
+ * 400 - no user email provided
+ * 400 - invalid email provided
+ * 400 - already exists a user with this email identifier
  */
-const DEFAULT_REGISTRATION_TOKEN_TTL = 6 * 60 * 60 * 1000 // 6 hours
+const DEFAULT_REGISTRATION_TOKEN_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
 router.post('/new-user', [ verifyAccessToken ], async (req, res) => {
-
-    const error = _error(res);
 
     const userEmail = req.body?.user_email;
 
     // Error cases
     const errors = [];
 
+    let validEmail, user;
     if (!userEmail) {
-        errors.push('No user email provided');
-    }
-
-    let validEmail;
-    if (userEmail && !(validEmail = emailValidator.validate(userEmail))) {
-        errors.push(`The email '${userEmail}' is not a valid email address`);
+        res.status(400).send('No user email provided');
+    } else if (!(validEmail = emailValidator.validate(userEmail))) {
+        res.status(400).send(`The email '${userEmail}' is not a valid email address`);
+    } else if ((user = await db.getUser(userEmail)) && user.email === userEmail) {
+        res.status(400).send(`There is already a user with the email '${userEmail}'`);
     }
 
     // Success case
-    if (userEmail && validEmail) {
-        error.stop = true;
-
+    if (userEmail && validEmail && (!user || user.email !== userEmail)) {
         const ascii = [];
         for (let i = 0; i < 16; ++i) {
             const code = (Math.random() < 0.5 ? 65 : 97) + Math.floor(Math.random() * 26);
@@ -215,8 +214,6 @@ router.post('/new-user', [ verifyAccessToken ], async (req, res) => {
             ttl: DEFAULT_REGISTRATION_TOKEN_TTL
         });
     }
-
-    error(...errors);
 });
 
 module.exports = router;
