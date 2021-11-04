@@ -91,18 +91,14 @@ const router = express.Router();
 const DEFAULT_ACCESS_TOKEN_TTL = 1 * 60 * 60 * 1000; // 1 hour
 
 router.post('/auth', [ verifyRequestBody({
+    auth_token: String,
     email: String,
-    date: Date,
-    auth_token: String
+    date: Date
 }) ], async (req, res) => {
 
     const email = req.body.email;
     const date = req.body.date;
     const authToken = req.body.auth_token;
-
-    // if (!date.toJSON()) {
-    //     res.status(400).send(errorMessage('Invalid date format'));
-    // }
 
     const user = await db.getUser(email);
 
@@ -133,16 +129,16 @@ router.post('/auth', [ verifyRequestBody({
 });
 
 /**
- * GET /geotab-data?from=<from (ISO String)>&to=<to (ISO String)>
+ * # GET /geotab-data?from=<from (ISO String)>&to=<to (ISO String)>
  * REQUEST BODY { @credentials }
  * RESPONSE BODY { forward_braking_events: [ ...events], trips: [ ...trips ] }
  * 
  * Failure Codes @credentials
- * 400 - no 'from' date provided
- * 400 - no 'to' date provided
- * 400 - 'from' date formatted incorrectly
- * 400 - 'to' date formatted incorrectly
- * 400 - invalid date range
+ * * 400 - no 'from' date provided
+ * * 400 - no 'to' date provided
+ * * 400 - 'from' date formatted incorrectly
+ * * 400 - 'to' date formatted incorrectly
+ * * 400 - invalid date range
  */
 router.get('/geotab-data', [ verifyAccessToken ], (req, res) => {
     // Driving data (pulled straight from MyGeotab)
@@ -150,23 +146,23 @@ router.get('/geotab-data', [ verifyAccessToken ], (req, res) => {
 });
 
 /**
- * GET /gt-lab-data?from=<from (ISO String)>&to=<to (ISO String)>
+ * # GET /gt-lab-data?from=<from (ISO String)>&to=<to (ISO String)>
  * REQUEST BODY { @credentials }
  * RESPONSE BODY { eco_scores: [ ...{<score and date>} ], < other data as implemented in the future > }
  * 
  * Failure Codes @credentials
- * 400 - no 'from' date provided
- * 400 - no 'to' date provided
- * 400 - 'from' date formatted incorrectly
- * 400 - 'to' date formatted incorrectly
- * 400 - invalid date range
+ * * 400 - no 'from' date provided
+ * * 400 - no 'to' date provided
+ * * 400 - 'from' date formatted incorrectly
+ * * 400 - 'to' date formatted incorrectly
+ * * 400 - invalid date range
  */
 router.get('/gt-lab-data', [ verifyAccessToken ], (req, res) => {
     // Past data (computed on our hardware)
 });
 
 /**
- * POST /register
+ * # POST /register
  * REQUEST BODY { registration_token: 'token', email: 'email', first_name: '...', last_name: '...' }
  * RESPONSE BODY { success: 'bool', access_token: 'token', ttl: 'ttl' }
  * 
