@@ -136,10 +136,19 @@ async function getSpeedingEvents(vehicle, from, to) {
             events[index].end = { latitude, longitude };
         }));
 
+        const split = event.duration.split(':').flatMap(part => part.split('.'));
+        const hours = parseInt(split[0] ?? 0);
+        const minutes = parseInt(split[1] ?? 0);
+        const seconds = parseInt(split[2] ?? 0);
+
         return {
             from: event.activeFrom,
             to: event.activeTo,
-            duration: event.duration,
+            duration: {
+                hours,
+                minutes,
+                seconds
+            },
             distance: event.distance,
             start: null,
             end: null,
@@ -150,7 +159,9 @@ async function getSpeedingEvents(vehicle, from, to) {
     await Promise.all(promises);
 
     return events.filter((event, index, events) => {
-        return !(events[index - 1] && objectEquals(events[index - 1], event))
+
+        // Doesn't properly get rid of duplicates yet
+        return !(events[index - 1] && objectEquals(events[index - 1], event)) && !(events[index].averageSpeed == 0);
     });
 }
 
@@ -191,21 +202,36 @@ async function getTrips(vehicle, from, to) {
     }));
 }
 
-async function arrayToCSV(array) {
+function arrayToCSV(array) {
 
     function flatKeys(obj, path = "") {
         let header = "";
+
         for (const key of Object.keys(obj)) {
 
             if (obj[key] instanceof Object) header += flatKeys(obj[key], `${key}_`);
-            else header += path + key + " ";
+            else header += path + key + ",";
         }
         return header;
     }
 
-    const header = flatKeys(array[0]);
+    function flatValues(obj) {
+        let values = [];
 
-    console.log(header);
+        for (const key of Object.keys(obj)) {
+
+            if (obj[key] instanceof Object) values.push(...flatValues(obj[key]));
+            else values.push(obj[key]);
+        }
+        return values;
+    }
+
+    const csv = flatKeys(array[0])                      // header
+        + array.map(flatValues).reduce((acc, curr) => { // convert and flatten data to csv
+            return acc + '\n' + curr.join(',');
+        }, '');
+
+    return csv;
 }
 
 /**
