@@ -1,7 +1,212 @@
 const _api = require('./init.js');
 
 const ACC_X_EVENTS_ID = 'DiagnosticAccelerationForwardBrakingId';
-const ACC_Y_EVENTS_ID = 'DiagnosticAccelerationSideToSideId'
+const ACC_Y_EVENTS_ID = 'DiagnosticAccelerationSideToSideId';
+
+async function fetchEngineData(api, from, to, vehicle, diagnosticId) {
+    return api.call(
+        'Get',
+        {
+
+            // API Object this data falls under
+            typeName: 'StatusData',
+            resultsLimit: '50000',  // maximum results
+
+            // Search object for narrowing results
+            search: {
+
+                // Data range
+                fromDate: from.toISOString(),
+                toDate: to.toISOString(),
+
+                // The kind of search to make
+                diagnosticSearch: {
+                    id: diagnosticId
+                },
+
+                // The vehicle to search under
+                deviceSearch: {
+                    id: vehicle
+                }
+            }
+        }
+    ).then(events => events.map(event => {
+
+        // Cleans up the diagnostic engine data to what we need
+        return {
+            dateTime: new Date(event.dateTime).toISOString(),
+            value: event.data,
+            type: event.diagnostic.id,
+            id: event.device.id
+        };
+    }));
+}
+
+async function getAccXEvents(vehicle, from, to) {
+
+    // Get the Geotab API object
+    const api = await _api;
+
+    // Fetch engine data functon
+    return await fetchEngineData(api, from, to, vehicle, ACC_X_EVENTS_ID);
+
+}
+
+async function getAccYEvents(vehicle, from, to) {
+    
+    // Get the Geotab API object
+    const api = await _api;
+
+    // Fetch engine data functon
+    return await fetchEngineData(api, from, to, vehicle, ACC_Y_EVENTS_ID);
+
+}
+
+async function getSpeedingEvents(vehicle, from, to) {
+
+    function objectEquals(obj1, obj2) {
+        for (const key of Object.keys(obj1)) {
+            if (obj1[key] instanceof Object) {
+                if (!objectEquals(obj1[key], obj2[key])) return false;
+            }
+
+            if (obj1[key] !== obj2[key]) return false;
+        }
+        return true;
+    }
+
+    // Get the Geotab API object
+    const api = await _api;
+
+    // Empty array to be filled with individual API calls to get the location and speed during a speeding exception
+    const promises = [];
+
+    const events = (await api.call(
+        'Get',
+        {
+            // API Object this data falls under
+            typeName: 'ExceptionEvent',
+            resultsLimit: '50000',  // maximum results
+
+            // Search object for narrowing results
+            search: {
+
+                // Data range
+                fromDate: from.toISOString(),
+                toDate: to.toISOString(),
+
+                // The kind of search to make
+                ruleSearch: {
+                    name: 'SpeedingNew'
+                },
+
+                // The vehicle to search under
+                deviceSearch: {
+                    id: vehicle
+                }
+            }
+        }
+    )).map((event, index) => {
+
+        promises.push(api.call(
+            'Get',
+            {
+                // API Object this data falls under
+                typeName: 'LogRecord',
+                resultsLimit: '50000',  // maximum results
+
+                // Search object for narrowing results
+                search: {
+
+                    // Data range
+                    fromDate: event.activeFrom,
+                    toDate: event.activeTo,
+
+                    // The vehicle to search under
+                    deviceSearch: {
+                        id: vehicle
+                    }
+                }
+            }
+        ).then(logs => {
+            events[index].averageSpeed = logs.reduce((acc, value) => acc + value.speed, 0) / logs.length;
+            let { latitude, longitude } = logs[0];
+            events[index].start = { latitude, longitude };
+            ({ latitude, longitude } = logs[logs.length - 1]);
+            events[index].end = { latitude, longitude };
+        }));
+
+        return {
+            from: event.activeFrom,
+            to: event.activeTo,
+            duration: event.duration,
+            distance: event.distance,
+            start: null,
+            end: null,
+            averageSpeed: null,
+        };
+    });
+
+    await Promise.all(promises);
+
+    return events.filter((event, index, events) => {
+        return !(events[index - 1] && objectEquals(events[index - 1], event))
+    });
+}
+
+async function getTrips(vehicle, from, to) {
+
+    // Get the Geotab API object
+    const api = await _api;
+
+    const fetchTrips = api.call(
+        'Get',
+        {
+            typeName: 'Trip',
+            resultsLimit: 50000,
+            search: {
+                fromDate: from.toISOString(),
+                toDate: to.toISOString(),
+                deviceSearch: {
+                    id: vehicle
+                }
+            }
+        }
+    ).then(trips => response.trips = trips.map(trip => {
+        const split = trip.drivingDuration.split(':').flatMap(part => part.split('.'));
+        const hours = parseInt(split[0] ?? 0);
+        const minutes = parseInt(split[1] ?? 0);
+        const seconds = parseInt(split[2] ?? 0);
+        return {
+            start: trip.start,
+            stop: trip.stop,
+            duration: {
+                hours,
+                minutes,
+                seconds
+            },
+            distance: trip.distance,
+            average_speed: trip.averageSpeed
+        };
+    }));
+}
+
+async function arrayToCSV(array) {
+
+    function flatKeys(obj, path = "") {
+        let header = "";
+        for (const key of Object.keys(obj)) {
+
+            if (obj[key] instanceof Object) header += flatKeys(obj[key], `${key}_`);
+            else header += path + key + " ";
+        }
+        return header;
+    }
+
+    const header = flatKeys(array[0]);
+
+    console.log(header);
+}
 
 /**
  * 
@@ -49,6 +254,9 @@ async function getDrivingData(vehicle, from, to) {
     const fetchForwardBrakingEvents = fetchEngineData(ACC_X_EVENTS_ID)
     .then(events => response.forward_braking_events = events);
 
+    const fetchCorneringEvents = fetchEngineData(ACC_Y_EVENTS_ID)
+    .then(events => response.cornering_events = events);
+
     const fetchTrips = api.call(
         'Get',
         {
@@ -62,15 +270,38 @@ async function getDrivingData(vehicle, from, to) {
                 }
             }
         }
-    ).then(trips => response.trips = trips);
+    ).then(trips => response.trips = trips.map(trip => {
+        const split = trip.drivingDuration.split(':').flatMap(part => part.split('.'));
+        const hours = parseInt(split[0] ?? 0);
+        const minutes = parseInt(split[1] ?? 0);
+        const seconds = parseInt(split[2] ?? 0);
+        return {
+            start: trip.start,
+            stop: trip.stop,
+            duration: {
+                hours,
+                minutes,
+                seconds
+            },
+            distance: trip.distance,
+            average_speed: trip.averageSpeed
+        };
+        // return trip;
+    }));
 
     await Promise.all([
-        (response.forward_braking_events = await fetchEngineData(ACC_X_EVENTS_ID)),
-        (response.cornering_events =await  fetchEngineData(ACC_Y_EVENTS_ID)),
-        (response.trips = await fetchTrips)
+        fetchForwardBrakingEvents,
+        fetchCorneringEvents,
+        fetchTrips
     ]);
 
-    console.log(response);
+    return response;
 }
 
-module.exports = getDrivingData;
+module.exports = {
+    getAccXEvents,
+    getAccYEvents,
+    getSpeedingEvents,
+    getTrips,
+    arrayToCSV
+};
