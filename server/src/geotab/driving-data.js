@@ -1,9 +1,17 @@
 const _api = require('./init.js');
+const arrayToCSV = require('../util/array-to-csv.js');
 
 const ACC_X_EVENTS_ID = 'DiagnosticAccelerationForwardBrakingId';
 const ACC_Y_EVENTS_ID = 'DiagnosticAccelerationSideToSideId';
 
-async function fetchEngineData(api, from, to, vehicle, diagnosticId) {
+/**
+ * @param api The GeotabApi object
+ * @param {string} vehicle The id of the vehicle
+ * @param {Date} from Start of date range
+ * @param {Date} to End of date range
+ * @param {string} diagnosticId The diagnostic ID of the engine status data to retrieve
+ */
+async function fetchEngineData(api, vehicle, from, to, diagnosticId) {
     return api.call(
         'Get',
         {
@@ -42,6 +50,12 @@ async function fetchEngineData(api, from, to, vehicle, diagnosticId) {
     }));
 }
 
+/**
+ * 
+ * @param {string} vehicle The id of the vehicle
+ * @param {Date} from Start of date range
+ * @param {Date} to End of date range
+ */
 async function getAccXEvents(vehicle, from, to) {
 
     // Get the Geotab API object
@@ -52,6 +66,12 @@ async function getAccXEvents(vehicle, from, to) {
 
 }
 
+/**
+ * 
+ * @param {string} vehicle The id of the vehicle
+ * @param {Date} from Start of date range
+ * @param {Date} to End of date range
+ */
 async function getAccYEvents(vehicle, from, to) {
     
     // Get the Geotab API object
@@ -62,6 +82,12 @@ async function getAccYEvents(vehicle, from, to) {
 
 }
 
+/**
+ * 
+ * @param {string} vehicle The id of the vehicle
+ * @param {Date} from Start of date range
+ * @param {Date} to End of date range
+ */
 async function getSpeedingEvents(vehicle, from, to) {
 
     function objectEquals(obj1, obj2) {
@@ -165,6 +191,12 @@ async function getSpeedingEvents(vehicle, from, to) {
     });
 }
 
+/**
+ * 
+ * @param {string} vehicle The id of the vehicle
+ * @param {Date} from Start of date range
+ * @param {Date} to End of date range
+ */
 async function getTrips(vehicle, from, to) {
 
     // Get the Geotab API object
@@ -200,38 +232,6 @@ async function getTrips(vehicle, from, to) {
             average_speed: trip.averageSpeed
         };
     }));
-}
-
-function arrayToCSV(array) {
-
-    function flatKeys(obj, path = "") {
-        let header = "";
-
-        for (const key of Object.keys(obj)) {
-
-            if (obj[key] instanceof Object) header += flatKeys(obj[key], `${key}_`);
-            else header += path + key + ",";
-        }
-        return header;
-    }
-
-    function flatValues(obj) {
-        let values = [];
-
-        for (const key of Object.keys(obj)) {
-
-            if (obj[key] instanceof Object) values.push(...flatValues(obj[key]));
-            else values.push(obj[key]);
-        }
-        return values;
-    }
-
-    const csv = flatKeys(array[0])                      // header
-        + array.map(flatValues).reduce((acc, curr) => { // convert and flatten data to csv
-            return acc + '\n' + curr.join(',');
-        }, '');
-
-    return csv;
 }
 
 /**
