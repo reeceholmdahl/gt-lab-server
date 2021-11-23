@@ -1,6 +1,6 @@
 {
   "name": "gt-lab-server",
-  "version": "1.0.0",
+  "version": "0.3.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,7 @@
     "email-validator": "^2.0.4",
     "express": "^4.17.1",
     "mg-api-js": "^2.0.3",
-    "passport": "^0.5.0",
-    "passport-local": "^1.0.0"
+    "serve-index": "^1.9.1",
+    "serve-static": "^1.14.1"
   }
 }

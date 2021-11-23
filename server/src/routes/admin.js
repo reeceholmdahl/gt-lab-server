@@ -5,6 +5,8 @@ const verifyRequestBody = require('../middleware/verify-request-body.js');
 const errorMessage = require('../util/error-msg.js');
 const crypto = require('crypto');
 const emailValidator = require('email-validator');
+const path = require('path');
+const fs = require('fs/promises');
 
 // Express router
 const router = express.Router();
@@ -19,7 +21,7 @@ const router = express.Router();
  * * 401 - no admin with this email
  * * 401 - invalid access token for the admin with this email
  */
- const verifyAccessToken = async (req, res, next) => {
+const verifyAccessToken = async (req, res, next) => {
 
     // Verify that the request body contains the proper credentials object with middleware-generating function
     const checkCredentialsObject = verifyRequestBody({
@@ -243,7 +245,7 @@ router.get('/data/acc-x', [ verifyAccessToken ], async (req, res) => {
  * RESPONSE BODY [ ...acc_y_event ]
  * QUERY PARAMS from (from date), to (to date), vehicle (vehicle name)
  */
- router.get('/data/acc-y', [ verifyAccessToken ], async (req, res) => {
+router.get('/data/acc-y', [ verifyAccessToken ], async (req, res) => {
 
     const { from, to, vehicle } = req.query;
 
@@ -258,7 +260,7 @@ router.get('/data/acc-x', [ verifyAccessToken ], async (req, res) => {
  * RESPONSE BODY [ ...trip ]
  * QUERY PARAMS from (from date), to (to date), vehicle (vehicle name)
  */
- router.get('/data/trips', [ verifyAccessToken ], async (req, res) => {
+router.get('/data/trips', [ verifyAccessToken ], async (req, res) => {
 
     const { from, to, vehicle } = req.query;
 
@@ -273,7 +275,7 @@ router.get('/data/acc-x', [ verifyAccessToken ], async (req, res) => {
  * RESPONSE BODY [ ...speeding_event ]
  * QUERY PARAMS from (from date), to (to date), vehicle (vehicle name)
  */
- router.get('/data/speeding', [ verifyAccessToken ], async (req, res) => {
+router.get('/data/speeding', [ verifyAccessToken ], async (req, res) => {
 
     const { from, to, vehicle } = req.query;
 
@@ -319,3 +321,4 @@ router.get('/data/acc-x', [ verifyAccessToken ], async (req, res) => {
  */
 
 module.exports = router;
+module.exports.verifyAccessToken = verifyAccessToken;
