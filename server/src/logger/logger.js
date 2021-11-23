@@ -30,6 +30,8 @@ module.exports = () => {
 
 async function log(from, to) {
 
+    console.log(`Logging all vehicle data from ${from} to ${to}`);
+
     to = to ?? new Date();
     from = from ?? new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
