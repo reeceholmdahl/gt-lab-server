@@ -3,6 +3,13 @@ const _api = require('./init.js');
 const ACC_X_EVENTS_ID = 'DiagnosticAccelerationForwardBrakingId';
 const ACC_Y_EVENTS_ID = 'DiagnosticAccelerationSideToSideId';
 
+async function getVehicles() {
+
+    const api = await _api;
+
+    return (await api.call('Get', { typeName: 'Device' })).map(device => new Object({ id: device.id, name: device.name }));
+}
+
 async function deviceIdFromName(name) {
 
     const api = await _api;
@@ -242,97 +249,8 @@ async function getTrips(vehicle, from, to) {
     });
 }
 
-/**
- * 
- * @param {string} vehicle The id of the vehicle to retrieve driving data about
- * @param {Date} from Start of date range of driving data to retrieve
- * @param {Date} to End of date range of driving data to retrieve
- */
-async function getDrivingData(vehicle, from, to) {
-    
-    const api = await _api;
-    
-    async function fetchEngineData(diagnosticId) {
-        return api.call(
-            'Get',
-            {
-                typeName: 'StatusData',
-                resultsLimit: '50000',  // maximum results
-                search: {
-                    fromDate: from.toISOString(),
-                    toDate: to.toISOString(),
-                    diagnosticSearch: {
-                        id: diagnosticId
-                    },
-                    deviceSearch: {
-                        id: vehicle
-                    }
-                }
-            }
-        ).then(events => events.map(event => {
-            return {
-                dateTime: new Date(event.dateTime).toISOString(),
-                value: event.data,
-                type: event.diagnostic.id,
-                id: event.device.id,
-            };
-        }));
-    }
-
-    const response = {
-        forward_braking_events: [],
-        cornering_events: [],
-        trips: []
-    }
-
-    const fetchForwardBrakingEvents = fetchEngineData(ACC_X_EVENTS_ID)
-    .then(events => response.forward_braking_events = events);
-
-    const fetchCorneringEvents = fetchEngineData(ACC_Y_EVENTS_ID)
-    .then(events => response.cornering_events = events);
-
-    const fetchTrips = api.call(
-        'Get',
-        {
-            typeName: 'Trip',
-            resultsLimit: 50000,
-            search: {
-                fromDate: from.toISOString(),
-                toDate: to.toISOString(),
-                deviceSearch: {
-                    id: vehicle
-                }
-            }
-        }
-    ).then(trips => response.trips = trips.map(trip => {
-        const split = trip.drivingDuration.split(':').flatMap(part => part.split('.'));
-        const hours = parseInt(split[0] ?? 0);
-        const minutes = parseInt(split[1] ?? 0);
-        const seconds = parseInt(split[2] ?? 0);
-        return {
-            start: trip.start,
-            stop: trip.stop,
-            duration: {
-                hours,
-                minutes,
-                seconds
-            },
-            distance: trip.distance,
-            average_speed: trip.averageSpeed
-        };
-        // return trip;
-    }));
-
-    await Promise.all([
-        fetchForwardBrakingEvents,
-        fetchCorneringEvents,
-        fetchTrips
-    ]);
-
-    return response;
-}
-
 module.exports = {
+    getVehicles,
     deviceIdFromName,
     getAccXEvents,
     getAccYEvents,

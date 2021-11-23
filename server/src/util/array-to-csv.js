@@ -1,5 +1,7 @@
 module.exports = (array) => {
 
+    if (array.length === 0) return '';
+
     function flatKeys(obj, path = "") {
         let header = "";
 
@@ -22,7 +24,7 @@ module.exports = (array) => {
         return values;
     }
 
-    const csv = flatKeys(array[0])                      // header
+    const csv = flatKeys(array[0]).slice(0, -1)         // header
         + array.map(flatValues).reduce((acc, curr) => { // convert and flatten data to csv
             return acc + '\n' + curr.join(',');
         }, '');
