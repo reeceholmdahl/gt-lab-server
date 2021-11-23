@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db/cassandra.js');
+const drivingData = require('../geotab/driving-data.js');
 const verifyRequestBody = require('../middleware/verify-request-body.js');
 const errorMessage = require('../util/error-msg.js');
 const crypto = require('crypto');
@@ -220,5 +221,101 @@ router.post('/new-user', [ verifyRequestBody({
         });
     }
 });
+
+/**
+ * # GET /data/acc-x
+ * REQUEST BODY { @credentials }
+ * RESPONSE BODY [ ...acc_x_event ]
+ * QUERY PARAMS from (from date), to (to date), vehicle (vehicle name)
+ */
+router.get('/data/acc-x', [ verifyAccessToken ], async (req, res) => {
+
+    const { from, to, vehicle } = req.query;
+
+    const id = await drivingData.deviceIdFromName(vehicle);
+
+    res.send(await drivingData.getAccXEvents(id, new Date(from), new Date(to)));
+});
+
+/**
+ * # GET /data/acc-y
+ * REQUEST BODY { @credentials }
+ * RESPONSE BODY [ ...acc_y_event ]
+ * QUERY PARAMS from (from date), to (to date), vehicle (vehicle name)
+ */
+ router.get('/data/acc-y', [ verifyAccessToken ], async (req, res) => {
+
+    const { from, to, vehicle } = req.query;
+
+    const id = await drivingData.deviceIdFromName(vehicle);
+
+    res.send(await drivingData.getAccYEvents(id, new Date(from), new Date(to)));
+});
+
+/**
+ * # GET /data/trips
+ * REQUEST BODY { @credentials }
+ * RESPONSE BODY [ ...trip ]
+ * QUERY PARAMS from (from date), to (to date), vehicle (vehicle name)
+ */
+ router.get('/data/trips', [ verifyAccessToken ], async (req, res) => {
+
+    const { from, to, vehicle } = req.query;
+
+    const id = await drivingData.deviceIdFromName(vehicle);
+
+    res.send(await drivingData.getTrips(id, new Date(from), new Date(to)));
+});
+
+/**
+ * # GET /data/speeding
+ * REQUEST BODY { @credentials }
+ * RESPONSE BODY [ ...speeding_event ]
+ * QUERY PARAMS from (from date), to (to date), vehicle (vehicle name)
+ */
+ router.get('/data/speeding', [ verifyAccessToken ], async (req, res) => {
+
+    const { from, to, vehicle } = req.query;
+
+    const id = await drivingData.deviceIdFromName(vehicle);
+
+    res.send(await drivingData.getSpeedingEvents(id, new Date(from), new Date(to)));
+});
+
+/**
+ * # GET /csv/acc-x/:MM-DD-YY
+ * REQUEST BODY { @credentials }
+ * RESPONSE csv-formatted AccX events
+ * QUERY PARAMS vehicle (vehicle name)
+ * 
+ * Gets accX events on the specified date and by the vehicle in a CSV format. If the day has not yet occurred or concluded there will be an error.
+ */
+
+/**
+ * # GET /csv/acc-y/:MM-DD-YY
+ * REQUEST BODY { @credentials }
+ * RESPONSE csv-formatted AccY events
+ * QUERY PARAMS vehicle (vehicle name)
+ * 
+ * Gets accY events on the specified date and by the vehicle in a CSV format. If the day has not yet occurred or concluded there will be an error.
+ */
+
+/**
+ * # GET /csv/trips/:MM-DD-YY
+ * REQUEST BODY { @credentials }
+ * RESPONSE csv-formatted Trips
+ * QUERY PARAMS vehicle (vehicle name)
+ * 
+ * Gets all trips on the specified date by the vehicle in a CSV format. If the day has not yet occurred or concluded there will be an error.
+ */
+
+/**
+ * # GET /csv/speeding/:MM-DD-YY
+ * REQUEST BODY { @credentials }
+ * RESPONSE csv-formatted Speeding events
+ * QUERY PARAMS vehicle (vehicle name)
+ * 
+ * Gets all speeding events on the specified date and by the vehicle in a CSV format. If the day has not yet occurred or concluded there will be an error.
+ */
 
 module.exports = router;

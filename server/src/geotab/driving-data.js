@@ -1,8 +1,14 @@
 const _api = require('./init.js');
-const arrayToCSV = require('../util/array-to-csv.js');
 
 const ACC_X_EVENTS_ID = 'DiagnosticAccelerationForwardBrakingId';
 const ACC_Y_EVENTS_ID = 'DiagnosticAccelerationSideToSideId';
+
+async function deviceIdFromName(name) {
+
+    const api = await _api;
+
+    return (await api.call('Get', { typeName: 'Device', search: { name } }))[0]?.id;
+}
 
 /**
  * @param api The GeotabApi object
@@ -42,17 +48,17 @@ async function fetchEngineData(api, vehicle, from, to, diagnosticId) {
 
         // Cleans up the diagnostic engine data to what we need
         return {
-            dateTime: new Date(event.dateTime).toISOString(),
+            date: new Date(event.dateTime).toISOString(),
             value: event.data,
-            type: event.diagnostic.id,
-            id: event.device.id
+            // type: event.diagnostic.id,
+            // id: event.device.id
         };
     }));
 }
 
 /**
  * 
- * @param {string} vehicle The id of the vehicle
+ * @param {string} vehicle The name of the vehicle
  * @param {Date} from Start of date range
  * @param {Date} to End of date range
  */
@@ -62,7 +68,7 @@ async function getAccXEvents(vehicle, from, to) {
     const api = await _api;
 
     // Fetch engine data functon
-    return await fetchEngineData(api, from, to, vehicle, ACC_X_EVENTS_ID);
+    return await fetchEngineData(api, vehicle, from, to, ACC_X_EVENTS_ID);
 
 }
 
@@ -78,7 +84,7 @@ async function getAccYEvents(vehicle, from, to) {
     const api = await _api;
 
     // Fetch engine data functon
-    return await fetchEngineData(api, from, to, vehicle, ACC_Y_EVENTS_ID);
+    return await fetchEngineData(api, vehicle, from, to, ACC_Y_EVENTS_ID);
 
 }
 
@@ -202,7 +208,7 @@ async function getTrips(vehicle, from, to) {
     // Get the Geotab API object
     const api = await _api;
 
-    const fetchTrips = api.call(
+    const trips = await api.call(
         'Get',
         {
             typeName: 'Trip',
@@ -215,7 +221,9 @@ async function getTrips(vehicle, from, to) {
                 }
             }
         }
-    ).then(trips => response.trips = trips.map(trip => {
+    );
+
+    return trips.map(trip => {
         const split = trip.drivingDuration.split(':').flatMap(part => part.split('.'));
         const hours = parseInt(split[0] ?? 0);
         const minutes = parseInt(split[1] ?? 0);
@@ -229,9 +237,9 @@ async function getTrips(vehicle, from, to) {
                 seconds
             },
             distance: trip.distance,
-            average_speed: trip.averageSpeed
+            averageSpeed: trip.averageSpeed
         };
-    }));
+    });
 }
 
 /**
@@ -325,9 +333,9 @@ async function getDrivingData(vehicle, from, to) {
 }
 
 module.exports = {
+    deviceIdFromName,
     getAccXEvents,
     getAccYEvents,
     getSpeedingEvents,
     getTrips,
-    arrayToCSV
 };
